@@ -74,6 +74,16 @@ image.delete()
 
 GUI: `_build/app/gimp-3.3` under `xvfb-run` (or a real display). **`gimp-console-3.3 --version`** is a quick smoke check without the wrapper.
 
+### AI Filter OpenAI smoke test
+
+Requires `OPENAI_API_KEY` in the environment. Uses `.ai-filter-test/test-image.jpg` and writes `.ai-filter-test/test-result.png` (gitignored):
+
+```bash
+python3 .ai-filter-test/test_openai_api.py
+```
+
+Optional: `AI_FILTER_TEST_PROMPT`, `AI_FILTER_TEST_SIZE`, `AI_FILTER_TEST_IMAGE`, `AI_FILTER_TEST_OUTPUT`.
+
 ### Lint / static checks (optional)
 
 CI runs `cppcheck`, `clang-format`, and `shellcheck` on packaging scripts — not a single `npm run lint` equivalent. See `.gitlab-ci.yml`.
