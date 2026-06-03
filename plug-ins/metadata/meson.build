@@ -33,6 +33,7 @@ plugin_exe = executable(plugin_name,
                           libgimpui_dep,
                           gexiv2,
                         ],
+                        c_args: [ '-Wno-deprecated-declarations', ],
                         win_subsystem: 'windows',
                         install: true,
                         install_dir: gimpplugindir / 'plug-ins' / plugin_name)
@@ -80,6 +81,7 @@ plugin_exe = executable(plugin_name,
                         dependencies: [
                           gtk3, gegl, gexiv2,
                         ],
+                        c_args: [ '-Wno-deprecated-declarations', ],
                         link_with: [
                           libgimp,
                           libgimpbase,

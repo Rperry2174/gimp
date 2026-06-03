@@ -28,6 +28,7 @@ plugin_exe = executable(plugin_name,
                           gexiv2,
                           libtiff,
                         ],
+                        c_args: [ '-Wno-deprecated-declarations', ],
                         win_subsystem: 'windows',
                         install: true,
                         install_dir: gimpplugindir / 'plug-ins' / plugin_name)

@@ -1,4 +1,5 @@
 python_plugins = [
+  { 'name': 'ai-filter' },
   { 'name': 'colorxhtml' },
   { 'name': 'file-openraster' },
   { 'name': 'foggify' },

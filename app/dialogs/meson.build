@@ -74,7 +74,10 @@ libappdialogs_sources += [
 libappdialogs = static_library('appdialogs',
   libappdialogs_sources,
   include_directories: [ rootInclude, rootAppInclude, ],
-  c_args: '-DG_LOG_DOMAIN="Gimp-Dialogs"',
+  c_args: [
+    '-DG_LOG_DOMAIN="Gimp-Dialogs"',
+    '-Wno-deprecated-declarations',
+  ],
   dependencies: [
     appstream,
     gegl,

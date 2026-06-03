@@ -399,7 +399,7 @@ libgimp_deps_table = [
     { 'gir': 'cairo-1.0',         'vapi': 'cairo-1.0',       },
     { 'gir': 'GdkPixbuf-2.0',     'vapi': 'gdk-pixbuf-2.0',  },
     { 'gir': 'Gegl-0.4',          'vapi': 'gegl-0.4',        },
-    { 'gir': 'GExiv2-0.10',       'vapi': 'gexiv2',          },
+    { 'gir': 'GExiv2-0.16',       'vapi': 'gexiv2-0.16',     },
     { 'gir': 'Gio-2.0',           'vapi': 'gio-2.0',         },
     { 'gir': gio_specific_gir,    'vapi': gio_specific_vapi, },
     { 'gir': 'GLib-2.0',          'vapi': 'glib-2.0',        },
@@ -425,7 +425,7 @@ libgimp = library('gimp-'+ gimp_api_version,
   sources: [
     pdbgen
   ],
-  c_args: [ '-DG_LOG_DOMAIN="LibGimp"', '-DGIMP_COMPILATION', ],
+  c_args: [ '-DG_LOG_DOMAIN="LibGimp"', '-DGIMP_COMPILATION', '-Wno-deprecated-declarations', ],
   link_with: [
     libgimpbase,
     libgimpcolor,

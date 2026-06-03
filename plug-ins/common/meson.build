@@ -93,6 +93,7 @@ endif
 if have_heif
   common_plugins_list += { 'name': 'file-heif',
     'deps': [ libheif, lcms, ],
+    'cflags': [ '-Wno-deprecated-declarations', ],
   }
 endif
 
@@ -106,6 +107,7 @@ if libjxl.found() and libjxl_threads.found()
   common_plugins_list += {
     'name': 'file-jpegxl',
     'deps': [ libjxl, libjxl_threads, ],
+    'cflags': [ '-Wno-deprecated-declarations', ],
   }
 endif
 
