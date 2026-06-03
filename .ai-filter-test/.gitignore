@@ -1,0 +1,8 @@
+*
+!.gitignore
+!test-image.jpg
+!test-image.jpeg
+
+# Generated API outputs stay local.
+results/
+test-result.png
