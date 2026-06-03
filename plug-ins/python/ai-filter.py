@@ -66,6 +66,18 @@ STYLES = {
             "photorealistic."
         ),
     },
+    'python-fu-ai-filter-polite-zombies': {
+        'label': N_("_Polite Zombies..."),
+        'blurb': N_("Turn everyone into courteous zombies at a formal gathering"),
+        'prompt': (
+            "Turn every person into a polite, well-mannered zombie dressed in "
+            "tidy formal clothes. Keep each person's recognizable pose, face "
+            "structure, and hairstyle while adding pale undead skin, subtle "
+            "sunken eyes, and refined zombie details. They should look courteous "
+            "and composed, as if making pleasant conversation at an elegant "
+            "social event. Hilarious, tasteful, photorealistic."
+        ),
+    },
 }
 
 
