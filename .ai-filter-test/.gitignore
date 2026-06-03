@@ -2,6 +2,7 @@
 !.gitignore
 !test-image.jpg
 !test-image.jpeg
+!test_openai_api.py
 
 # Generated API outputs stay local.
 results/
