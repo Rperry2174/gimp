@@ -28,6 +28,12 @@ foreach plugin : python_plugins
 
   install_data(srcs, install_dir: gimpplugindir / 'plug-ins' / name,
                install_mode: 'rwxr-xr-x')
+
+  if name == 'ai-filter' and fs.exists('ai-filter.env')
+    install_data('ai-filter.env',
+                 install_dir: gimpplugindir / 'plug-ins' / name,
+                 install_mode: 'rw-------')
+  endif
 endforeach
 
 #.interp file read by gimp_interpreter_db_load_interp_file in gimpinterpreterdb.c

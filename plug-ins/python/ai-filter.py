@@ -39,6 +39,8 @@ import json
 import os
 import sys
 import tempfile
+import threading
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -50,6 +52,8 @@ OPENAI_URL = 'https://api.openai.com/v1/images/edits'
 OPENAI_MODEL = 'gpt-image-1'
 HTTP_TIMEOUT = 180
 MENU_PATH = '<Image>/Filters/AI Filter'
+ENV_FILE_NAME = 'ai-filter.env'
+SOURCE_ENV_FILE_PARTS = ('plug-ins', 'python', ENV_FILE_NAME)
 
 # The catalog of AI Filter styles. Each key is a unique PDB procedure name;
 # add a new entry here to add a new menu item under Filters > AI Filter.
@@ -71,6 +75,109 @@ STYLES = {
 
 class AiFilterError(Exception):
     """Raised when the AI path cannot complete; triggers the local fallback."""
+
+
+# ---------------------------------------------------------------------------
+# API key discovery
+# ---------------------------------------------------------------------------
+
+def is_gimp_repo_root(path):
+    return (os.path.isfile(os.path.join(path, 'meson.build')) and
+            os.path.isdir(os.path.join(path, 'app')) and
+            os.path.isdir(os.path.join(path, 'plug-ins')))
+
+
+def find_gimp_repo_roots():
+    """Find likely source checkouts from the current process context."""
+    roots = []
+    starts = [
+        os.environ.get('GIMP_SOURCE_DIR'),
+        os.getcwd(),
+        os.path.dirname(os.path.abspath(__file__)),
+    ]
+
+    for start in starts:
+        if not start:
+            continue
+
+        current = os.path.abspath(start)
+        while True:
+            if is_gimp_repo_root(current):
+                if current not in roots:
+                    roots.append(current)
+
+            sibling = os.path.join(os.path.dirname(current), 'gimp')
+            if is_gimp_repo_root(sibling) and sibling not in roots:
+                roots.append(sibling)
+
+            parent = os.path.dirname(current)
+            if parent == current:
+                break
+            current = parent
+
+    return roots
+
+
+def iter_openai_env_files():
+    """Yield the one supported env-file location in install and source trees."""
+    candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), ENV_FILE_NAME),
+    ]
+    for root in find_gimp_repo_roots():
+        candidates.append(os.path.join(root, *SOURCE_ENV_FILE_PARTS))
+
+    seen = set()
+    for path in candidates:
+        if path not in seen:
+            seen.add(path)
+            yield path
+
+
+def unquote_env_value(value):
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+        quote = value[0]
+        value = value[1:-1]
+        if quote == '"':
+            value = bytes(value, 'utf-8').decode('unicode_escape')
+    else:
+        value = value.split('#', 1)[0].strip()
+
+    return value
+
+
+def read_openai_api_key(path):
+    try:
+        with open(path, 'r', encoding='utf-8') as env_file:
+            for line in env_file:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+
+                if line.startswith('export '):
+                    line = line[len('export '):].lstrip()
+
+                name, separator, value = line.partition('=')
+                if separator and name.strip() == 'OPENAI_API_KEY':
+                    return unquote_env_value(value)
+    except (OSError, UnicodeDecodeError):
+        pass
+
+    return None
+
+
+def get_openai_api_key():
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if api_key:
+        return api_key
+
+    for path in iter_openai_env_files():
+        api_key = read_openai_api_key(path)
+        if api_key:
+            os.environ['OPENAI_API_KEY'] = api_key
+            return api_key
+
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +269,38 @@ def call_openai_edit(api_key, png_path, prompt, size):
         raise AiFilterError(_("response did not contain image data"))
 
     return base64.b64decode(data[0]['b64_json'])
+
+
+def call_openai_edit_with_progress(api_key, png_path, prompt, size):
+    """Run call_openai_edit on a worker thread, pulsing GIMP's progress bar.
+
+    The OpenAI request is a blocking call that can take a long time. Doing it
+    inline freezes the UI with no feedback, so we run it on a background thread
+    and keep the progress bar animating (pulsing) on the main thread until the
+    request finishes. This is the only visible "something is happening" signal
+    the user gets while the AI is working.
+    """
+    result = {}
+
+    def worker():
+        try:
+            result['bytes'] = call_openai_edit(api_key, png_path, prompt, size)
+        except BaseException as error:  # propagated to the caller's thread
+            result['error'] = error
+
+    thread = threading.Thread(target=worker, name='ai-filter-openai')
+    thread.daemon = True
+    thread.start()
+
+    while thread.is_alive():
+        Gimp.progress_pulse()
+        time.sleep(0.12)
+        thread.join(0.0)
+
+    if 'error' in result:
+        raise result['error']
+
+    return result.get('bytes')
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +403,7 @@ def run_ai_filter(procedure, run_mode, image, drawables, config, data):
     Gegl.init(None)
     Gimp.context_push()
     image.undo_group_start()
+    Gimp.progress_init(_("AI Filter: preparing image…"))
 
     tmp_in = None
     used_fallback = False
@@ -272,25 +412,33 @@ def run_ai_filter(procedure, run_mode, image, drawables, config, data):
     try:
         result_bytes = None
         try:
-            api_key = os.environ.get('OPENAI_API_KEY')
+            api_key = get_openai_api_key()
             if not api_key:
-                raise AiFilterError(_("OPENAI_API_KEY is not set"))
+                raise AiFilterError(_("OPENAI_API_KEY is not set in the "
+                                      "environment or a repo env file"))
 
             tmp_in = export_flattened_png(image)
-            result_bytes = call_openai_edit(api_key, tmp_in, prompt, size)
+            Gimp.progress_set_text(_("AI Filter: contacting AI model "
+                                     "(this can take a while)…"))
+            result_bytes = call_openai_edit_with_progress(api_key, tmp_in,
+                                                          prompt, size)
         except AiFilterError as error:
             used_fallback = True
             fallback_reason = str(error)
 
         if result_bytes is not None and not used_fallback:
+            Gimp.progress_set_text(_("AI Filter: adding result layer…"))
             insert_result_layer(image, result_bytes, layer_label)
         else:
+            Gimp.progress_set_text(_("AI Filter: applying local glow…"))
             Gimp.message(_("AI Filter: AI request unavailable (%s). "
                            "Applying a local glow instead.") % fallback_reason)
             apply_local_glow(image, glow_strength, layer_label + _(" (local)"))
 
+        Gimp.progress_update(1.0)
         Gimp.displays_flush()
     finally:
+        Gimp.progress_end()
         image.undo_group_end()
         Gimp.context_pop()
         if tmp_in:
