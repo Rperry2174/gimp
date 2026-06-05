@@ -143,25 +143,36 @@ def call_openai_edit(api_key, png_path, prompt, size):
 
     try:
         with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT) as response:
-            payload = json.loads(response.read().decode('utf-8'))
+            raw = response.read().decode('utf-8')
     except urllib.error.HTTPError as error:
-        detail = ''
+        reason = ''
         try:
-            detail = error.read().decode('utf-8', 'replace')
+            body = json.loads(error.read().decode('utf-8', 'replace'))
+            reason = (body.get('error') or {}).get('message', '') or ''
         except Exception:
             pass
-        raise AiFilterError(_("API returned HTTP %d") % error.code +
-                            ((': ' + detail[:200]) if detail else ''))
+        if reason:
+            raise AiFilterError(
+                _("API error (HTTP %d): %s") % (error.code, reason))
+        raise AiFilterError(_("API returned HTTP %d") % error.code)
     except urllib.error.URLError as error:
         raise AiFilterError(_("network error: %s") % error.reason)
     except (TimeoutError, OSError) as error:
         raise AiFilterError(_("request failed: %s") % error)
 
+    try:
+        payload = json.loads(raw)
+    except ValueError as error:
+        raise AiFilterError(_("invalid JSON in API response: %s") % error)
+
     data = payload.get('data')
     if not data or 'b64_json' not in data[0]:
         raise AiFilterError(_("response did not contain image data"))
 
-    return base64.b64decode(data[0]['b64_json'])
+    try:
+        return base64.b64decode(data[0]['b64_json'])
+    except Exception as error:
+        raise AiFilterError(_("could not decode image data: %s") % error)
 
 
 # ---------------------------------------------------------------------------
@@ -281,6 +292,9 @@ def run_ai_filter(procedure, run_mode, image, drawables, config, data):
         except AiFilterError as error:
             used_fallback = True
             fallback_reason = str(error)
+        except Exception as error:
+            used_fallback = True
+            fallback_reason = _("unexpected error: %s") % error
 
         if result_bytes is not None and not used_fallback:
             insert_result_layer(image, result_bytes, layer_label)
