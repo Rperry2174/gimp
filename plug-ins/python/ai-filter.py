@@ -294,7 +294,6 @@ def call_openai_edit_with_progress(api_key, png_path, prompt, size):
 
     while thread.is_alive():
         Gimp.progress_pulse()
-        time.sleep(0.12)
         thread.join(0.0)
 
     if 'error' in result:
