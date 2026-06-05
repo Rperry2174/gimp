@@ -424,9 +424,26 @@ gimp_tool_button_query_tooltip_add_tool (GimpToolButton *tool_button,
   action = GIMP_ACTION (g_action_map_lookup_action (G_ACTION_MAP (gimp->app), name));
   g_free (name);
 
-  image = gtk_image_new_from_icon_name (
-    gimp_viewable_get_icon_name (GIMP_VIEWABLE (tool_info)),
-    icon_size);
+  /* Use gimp_widget_load_icon() rather than gtk_image_new_from_icon_name()
+   * so that the symbolic (grey) variant is always loaded explicitly.
+   * gtk_image_new_from_icon_name() relies on the -gtk-icon-style CSS
+   * property being inherited by the tooltip's style context, which is not
+   * guaranteed on all platforms (notably macOS), causing colour icons —
+   * some of which contain vivid colours such as the red nozzle on the
+   * Airbrush tool — to appear in the tooltip popup.
+   */
+  {
+    GdkPixbuf *pixbuf;
+    gint       width;
+    gint       height;
+
+    gtk_icon_size_lookup (icon_size, &width, &height);
+    pixbuf = gimp_widget_load_icon (GTK_WIDGET (tool_button),
+                                    gimp_viewable_get_icon_name (GIMP_VIEWABLE (tool_info)),
+                                    MIN (width, height));
+    image = gtk_image_new_from_pixbuf (pixbuf);
+    g_object_unref (pixbuf);
+  }
   gtk_grid_attach (grid,
                    image,
                    0, row,
