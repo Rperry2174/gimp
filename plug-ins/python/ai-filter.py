@@ -143,7 +143,7 @@ def call_openai_edit(api_key, png_path, prompt, size):
 
     try:
         with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT) as response:
-            payload = json.loads(response.read().decode('utf-8'))
+            raw = response.read()
     except urllib.error.HTTPError as error:
         detail = ''
         try:
@@ -155,7 +155,14 @@ def call_openai_edit(api_key, png_path, prompt, size):
     except urllib.error.URLError as error:
         raise AiFilterError(_("network error: %s") % error.reason)
     except (TimeoutError, OSError) as error:
-        raise AiFilterError(_("request failed: %s") % error)
+        raise AiFilterError(_("request timed out or failed: %s") % error)
+    except Exception as error:
+        raise AiFilterError(_("unexpected error during request: %s") % error)
+
+    try:
+        payload = json.loads(raw.decode('utf-8'))
+    except ValueError as error:
+        raise AiFilterError(_("response was not valid JSON: %s") % error)
 
     data = payload.get('data')
     if not data or 'b64_json' not in data[0]:
